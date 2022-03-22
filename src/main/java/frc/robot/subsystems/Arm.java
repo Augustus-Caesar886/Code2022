@@ -2,28 +2,34 @@ package frc.robot.subsystems;
 
 import com.ctre.phoenix.motorcontrol.ControlMode;
 import com.ctre.phoenix.motorcontrol.can.TalonSRX;
+import com.revrobotics.CANEncoder;
+import com.revrobotics.CANSparkMax;
+import com.revrobotics.RelativeEncoder;
+import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 
 import edu.wpi.first.math.controller.ArmFeedforward;
 import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
-import edu.wpi.first.wpilibj.DutyCycleEncoder;
+import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.ProfiledPIDSubsystem;
 import frc.robot.Util;
 import frc.robot.Constants.ArmConstants;
+import frc.robot.Constants.IntakeConstants;
 
 public class Arm extends ProfiledPIDSubsystem {
     
-    private static final TalonSRX motor = Util.createTalonSRX(ArmConstants.armMotor, false);
+    private static final CANSparkMax motor = Util.createSparkMAX(ArmConstants.actuateMotor, MotorType.kBrushless);
     
-    private static final Encoder armEncoder = new Encoder(4,3);
+    private RelativeEncoder armEncoder = motor.getEncoder();
+    //private static final Encoder armEncoder = new Encoder(4,3);
     
     private static final ArmFeedforward FEEDFORWARD = new ArmFeedforward(ArmConstants.kS, ArmConstants.kCos, ArmConstants.kV, ArmConstants.kA);
     
     private static Arm instance;
     public static Arm getInstance() {
-        if (instance == null) instance = new Arm();
+        if(instance == null) instance = new Arm();
         return instance;
     }
     
@@ -31,7 +37,7 @@ public class Arm extends ProfiledPIDSubsystem {
      * Enum class representing the two possible positions of the intake arm, UP and DOWN
      */
     public enum State {
-        UP(ArmConstants.kArmOffset), DOWN(-0.132);
+        STORED(0), OUT(ArmConstants.kArmOffset); //Stored is the starting position, where the arm is stored in the bot, while out is used for intake
         
         public double position;
         
@@ -46,12 +52,13 @@ public class Arm extends ProfiledPIDSubsystem {
     private Arm() {
         super(new ProfiledPIDController(ArmConstants.kP , ArmConstants.kI, ArmConstants.kD,
                 new TrapezoidProfile.Constraints(ArmConstants.kMaxVelocity, ArmConstants.kMaxAcceleration)), 0);
-        
+        /*
         motor.configContinuousCurrentLimit(1);
         motor.configPeakCurrentLimit(0);
         motor.enableCurrentLimit(true);
-        
-        setGoal(ArmConstants.kArmOffset);
+        */
+        motor.setInverted(false);
+        setGoal(State.STORED);
 
         disable();
         register();
@@ -60,32 +67,34 @@ public class Arm extends ProfiledPIDSubsystem {
     public void setGoal(State goal) {
         setGoal(goal.position);
     }
-    
+    public void setOpenLoop(double value) {
+        motor.set(value);
+    }
     /**
      * Set the intake to rotate manually (overriding the position control)
      * @param value Percent of maximum voltage to send to motor
      */
     public void rotate(double value) {
-        motor.set(ControlMode.PercentOutput, value);
+        motor.set(value);
     }
     
     public void stopArm() {
         disable();
-        motor.set(ControlMode.PercentOutput, 0);
+        motor.set(0);//makes it so it moves the same as the spring pulling, comes from testing :(
     }
     
     /**
      * Resets encoders to zero
      */
     public void resetEncoders() {
-        armEncoder.reset();
+        armEncoder.setPosition(0.0);
     }
     
     @Override
     public void periodic() {
-        super.periodic();
+        //super.periodic();
 
-        SmartDashboard.putNumber("encoder value", armEncoder.get());
+        SmartDashboard.putNumber("encoder value", armEncoder.getPosition() * 2 * Math.PI);
         SmartDashboard.putNumber("measurement", getMeasurement());
     }
     
@@ -94,7 +103,7 @@ public class Arm extends ProfiledPIDSubsystem {
      */
     @Override
     public double getMeasurement() {
-        return armEncoder.getDistance() - ArmConstants.kArmOffset;
+        return armEncoder.getPosition() * (2 * Math.PI);
     }
     
     /**
@@ -103,13 +112,15 @@ public class Arm extends ProfiledPIDSubsystem {
     @Override
     public void useOutput(double output, TrapezoidProfile.State setpoint) {
         // Calculate feedforward from the setpoint
-        double feedforward = FEEDFORWARD.calculate(setpoint.position, setpoint.velocity);
+        //FEEDFORWARD.calculate(setpoint.position, setpoint.velocity);
         // Set motor, converting voltage to percent voltage
-        motor.set(ControlMode.PercentOutput, (output + feedforward)/12.0);
+
+
+        motor.set(setpoint.velocity/13.209 + output/12); //without feedforward, use PID to correct error
 
         SmartDashboard.putNumber("pos", setpoint.position);
         SmartDashboard.putNumber("output", output/12);
-        SmartDashboard.putNumber("feedforward + output", (output+feedforward)/12);
+        //SmartDashboard.putNumber("feedforward + output", (output+feedforward)/12);
 
     }
 }

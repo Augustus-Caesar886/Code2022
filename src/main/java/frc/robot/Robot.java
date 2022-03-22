@@ -5,11 +5,26 @@
 package frc.robot;
 
 import frc.robot.RobotContainer;
+import frc.robot.Autonomous.Auto;
+import frc.robot.Constants.DriverConstants;
+import frc.robot.RobotContainer.LEDMode;
+import frc.robot.commands.CargoTrack;
+import frc.robot.commands.Drive;
+import frc.robot.commands.HubTrack;
+import frc.robot.commands.SillyDriveX;
+import frc.robot.commands.SillyShoot;
+import frc.robot.subsystems.Arm;
 import frc.robot.subsystems.Drivetrain;
+import frc.robot.subsystems.Intake;
+import frc.robot.subsystems.Shooter;
+import edu.wpi.first.wpilibj.PowerDistribution;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
+import edu.wpi.first.wpilibj2.command.InstantCommand;
+import edu.wpi.first.wpilibj2.command.RunCommand;
 
 
 /**
@@ -22,21 +37,41 @@ public class Robot extends TimedRobot {
   private static final String kDefaultAuto = "Default";
   private static final String kCustomAuto = "My Auto";
   private String m_autoSelected;
-  private final SendableChooser<String> m_chooser = new SendableChooser<>();
   private RobotContainer robot;
-
+  private PowerDistribution pdp = new PowerDistribution();
+  private static boolean use_csV3 = false;
+  private enum TeleopStrat {
+    OFFENSE, DEFENSE
+  }
+  
+  private final SendableChooser<Command> m_chooser = new SendableChooser<>();
+  private final SendableChooser<Boolean> use_V3 = new SendableChooser<>(); //Use ColorSensorV3 over Photoelectric for conveyor queuing
+  private final SendableChooser<TeleopStrat> teleopStrat = new SendableChooser<>();
+  public static boolean useV3() {
+    return use_csV3; //prevent unwanted writing operations but allow reading
+  }
   /**
    * This function is run when the robot is first started up and should be used for any
    * initialization code.
    */
+  
   @Override
   public void robotInit() {
-    m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
-    m_chooser.addOption("My Auto", kCustomAuto);
-    SmartDashboard.putData("Auto choices", m_chooser);
     robot = RobotContainer.getInstance();
+    pdp.clearStickyFaults();
+    m_chooser.setDefaultOption("Shoot First", RobotContainer.getAutonomousCommand(Auto.Selection.SHOOTFIRST));
+    m_chooser.addOption("Intake First", RobotContainer.getAutonomousCommand(Auto.Selection.INTAKEFIRST));
+    m_chooser.addOption("Be Silly", RobotContainer.getAutonomousCommand(Auto.Selection.SILLY));
+    use_V3.setDefaultOption("Use photoelectric indexing", false);
+    use_V3.addOption("Use colorsensorV3 indexing", true);
+    teleopStrat.setDefaultOption("Offense", TeleopStrat.OFFENSE);
+    teleopStrat.addOption("Defense", TeleopStrat.DEFENSE);
+    SmartDashboard.putData("Auto choices", m_chooser);
+    SmartDashboard.putData("Use ColorSensorV3 queuing?", use_V3);
+    SmartDashboard.putData("Teleop Strategy", teleopStrat);
 
-    RobotContainer.drivetrain.resetEncoders();
+    Drivetrain.getInstance().resetEncoders();
+    //Arm.getInstance().resetEncoders();
   }
 
   /**
@@ -49,8 +84,8 @@ public class Robot extends TimedRobot {
   @Override
   public void robotPeriodic() {
     CommandScheduler.getInstance().run();
-    SmartDashboard.putNumber("dt left enc", Drivetrain.getLeftEnc());
-    SmartDashboard.putNumber("dt right enc", Drivetrain.getRightEnc());
+    use_csV3 = use_V3.getSelected();
+    SmartDashboard.putNumber("pdp channel 0", pdp.getCurrent(0));
   }
 
   /**
@@ -63,17 +98,19 @@ public class Robot extends TimedRobot {
    * below with additional strings. If using the SendableChooser make sure to add them to the
    * chooser code above as well.
    */
+  private Command auto;
   @Override
   public void autonomousInit() {
-    m_autoSelected = m_chooser.getSelected();
-    // m_autoSelected = SmartDashboard.getString("Auto Selector", kDefaultAuto);
-    System.out.println("Auto selected: " + m_autoSelected);
+    pdp.clearStickyFaults();
+    CommandScheduler.getInstance().schedule();
+    //CommandScheduler.getInstance().schedule(new SillyDriveX(0.5, true));
   }
 
   /** This function is called periodically during autonomous. */
   @Override
   public void autonomousPeriodic() {
-    switch (m_autoSelected) {
+    //
+    /*switch (m_autoSelected) {
       case kCustomAuto:
         // Put custom auto code here
         break;
@@ -81,16 +118,30 @@ public class Robot extends TimedRobot {
       default:
         // Put default auto code here
         break;
-    }
+    }*/
   }
 
   /** This function is called once when teleop is enabled. */
   @Override
-  public void teleopInit() {}
+  public void teleopInit() {
+    if(auto != null) auto.cancel();
+    robot.setLEDMode(LEDMode.OFF);
+
+    Shooter.getInstance().setDefaultCommand(new RunCommand(() -> Shooter.getInstance().setOpenLoop(0.65), Shooter.getInstance()));
+  }
 
   /** This function is called periodically during operator control. */
   @Override
-  public void teleopPeriodic() {}
+  public void teleopPeriodic() {
+    switch(teleopStrat.getSelected()) {
+      case OFFENSE:
+        Drivetrain.setInverted(false);
+        break;
+      case DEFENSE:
+        Drivetrain.setInverted(true);
+        break;
+    }
+  }
 
   /** This function is called once when the robot is disabled. */
   @Override

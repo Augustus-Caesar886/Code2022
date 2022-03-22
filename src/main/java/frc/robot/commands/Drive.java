@@ -15,17 +15,16 @@ import edu.wpi.first.wpilibj2.command.Subsystem;
 
 
 public class Drive implements Command {
-    private Subsystem[] requirements = {RobotContainer.drivetrain};
+    private Drivetrain drivetrain = Drivetrain.getInstance();
+    private Subsystem[] requirements = {drivetrain};
 
-    private Drivetrain drivetrain;
 
     public Drive(State state) {
         this.state = state;
-        drivetrain = Drivetrain.getInstance();
     }
 
     public enum State {
-        CurvatureDrive2019, CheesyDriveOpenLoop, CheesyDriveClosedLoop
+        CurvatureDrive2019, CheesyDriveOpenLoop, CheesyDriveClosedLoop, TankDrive
     }
     
     private State state;
@@ -34,8 +33,10 @@ public class Drive implements Command {
     public void execute(){
         // Retrieving the deadbanded throttle and turn values (the controller joystick values)
         double throttle = RobotContainer.getThrottle();
-        double turn = RobotContainer.getTurn();
-
+        double turn = RobotContainer.getTurn(); //* Drivetrain.getkInvert();
+        
+        
+        double altThrottle = RobotContainer.getAltThrottle();
         SmartDashboard.putNumber("turn input", turn);
         SmartDashboard.putNumber("throttle input", throttle);
 
@@ -45,6 +46,8 @@ public class Drive implements Command {
             case CurvatureDrive2019:
                 // Differential drive as long as throttle is greater than zero (deadbanded).
                 if (throttle != 0) {
+                    throttle *= Drivetrain.getkInvert();
+                    turn *= Drivetrain.getkInvert();
                     left = (throttle + throttle * turn * DriverConstants.kTurnSens) * DriverConstants.kDriveSens;
                     right = (throttle - throttle * turn * DriverConstants.kTurnSens) * DriverConstants.kDriveSens;
 
@@ -55,7 +58,6 @@ public class Drive implements Command {
                         left = left / maxMagnitude * DriverConstants.kDriveSens;
                         right = right / maxMagnitude * DriverConstants.kDriveSens;
                     } 
-
                 } else {
                     // Turns in place when there is no throttle input
                     left = turn * DriverConstants.kTurnInPlaceSens;
@@ -115,10 +117,16 @@ public class Drive implements Command {
                 }
                 
                 break;
+            case TankDrive:
+                left = throttle;
+                right = altThrottle;
+                break;
             default:
                 left = right = 0;
                 break;
         }
+        SmartDashboard.putNumber("left dt commanded", left);
+        SmartDashboard.putNumber("right dt commanded", right);
         drivetrain.setOpenLoop(left, right);
     }
 

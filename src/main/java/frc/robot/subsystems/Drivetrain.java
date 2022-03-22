@@ -8,14 +8,17 @@ import frc.robot.Util;
 import java.util.List;
 
 import com.ctre.phoenix.motorcontrol.ControlMode;
+import com.ctre.phoenix.motorcontrol.NeutralMode;
 import com.ctre.phoenix.motorcontrol.can.TalonFX;
 import edu.wpi.first.wpilibj2.command.Subsystem;
 import edu.wpi.first.wpilibj.motorcontrol.MotorControllerGroup;
 import edu.wpi.first.math.kinematics.DifferentialDriveKinematics;
 import edu.wpi.first.math.kinematics.DifferentialDriveOdometry;
 import edu.wpi.first.math.kinematics.DifferentialDriveWheelSpeeds;
+import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.controller.PIDController;
+import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
@@ -27,38 +30,59 @@ public class Drivetrain implements Subsystem {
         rightMaster = Util.createTalonFX(DrivetrainConstants.rightMaster),
         rightSlave = Util.createTalonFX(DrivetrainConstants.rightSlave);
     
-    public static final List<TalonFX> motors = List.of(leftMaster, leftSlave, rightMaster, rightSlave);
+    public static final List<TalonFX> motors = List.of(leftMaster, leftSlave, rightMaster , rightSlave);
 
 
     public static final DifferentialDriveKinematics KINEMATICS = new DifferentialDriveKinematics(DrivetrainConstants.kTrackWidth);
     public static final SimpleMotorFeedforward FEEDFORWARD = new SimpleMotorFeedforward(DrivetrainConstants.kS, DrivetrainConstants.kV, DrivetrainConstants.kA);
-    public static final PIDController LEFT_PID_CONTROLLER = new PIDController(DrivetrainConstants.kP, DrivetrainConstants.kI, DrivetrainConstants.kD);
-    public static final PIDController RIGHT_PID_CONTROLLER = new PIDController(DrivetrainConstants.kP, DrivetrainConstants.kI, DrivetrainConstants.kD);
-    //public static DifferentialDriveOdometry ODOMETRY = new DifferentialDriveOdometry(Rotation2d.fromDegrees(RobotContainer.navX.getAngle()));
-    
+    public static final TrapezoidProfile.Constraints constraints = new TrapezoidProfile.Constraints(DrivetrainConstants.kMaxSpeedMPS, DrivetrainConstants.kMaxAcceleration);
+    public static final ProfiledPIDController LEFT_PID_CONTROLLER = new ProfiledPIDController(DrivetrainConstants.kP, DrivetrainConstants.kI, DrivetrainConstants.kD, constraints);
+    public static final ProfiledPIDController RIGHT_PID_CONTROLLER = new ProfiledPIDController(DrivetrainConstants.kP, DrivetrainConstants.kI, DrivetrainConstants.kD, constraints);
+    public static DifferentialDriveOdometry ODOMETRY = new DifferentialDriveOdometry(Rotation2d.fromDegrees(RobotContainer.navX.getAngle()));
     private Drivetrain() {
         leftSlave.follow(leftMaster);
         rightSlave.follow(rightMaster);
-
+        //leftSlave.setNeutralMode(NeutralMode.Coast);
+        //rightSlave.setNeutralMode(NeutralMode.Coast);
         // Inverting opposite sides of the drivetrain
-        List.of(leftMaster, leftSlave).forEach(motor -> motor.setInverted(false));
-        List.of(rightMaster, rightSlave).forEach(motor -> motor.setInverted(true));
+        List.of(leftMaster , leftSlave).forEach(motor -> motor.setInverted(false));
+        List.of(rightMaster , rightSlave).forEach(motor -> motor.setInverted(true));
 
         register();
     }
 
     @Override
     public void periodic() {
+        ODOMETRY.update(Rotation2d.fromDegrees(RobotContainer.navX.getAngle()),
+        getLeftEncMeters(),
+        getRightEncMeters());
         SmartDashboard.putNumber("Left Master output: ", leftMaster.getMotorOutputPercent());
-        SmartDashboard.putNumber("Left Slave output: ", leftSlave.getMotorOutputPercent());
+        //SmartDashboard.putNumber("Left Slave output: ", leftSlave.getMotorOutputPercent());
         SmartDashboard.putNumber("Right Master output: ", rightMaster.getMotorOutputPercent());
-        SmartDashboard.putNumber("Right Slave output: ", rightSlave.getMotorOutputPercent());
-
+        SmartDashboard.putNumber("falcon500 stator", leftSlave.getStatorCurrent());
+        SmartDashboard.putNumber("falcon500 bus", leftSlave.getBusVoltage());
+        SmartDashboard.putNumber("falcon500 supply", leftSlave.getSupplyCurrent());
+        SmartDashboard.putNumber("falcon500 temp", leftSlave.getTemperature());
+        SmartDashboard.putNumber("kInverted", kInverted);
+        //SmartDashboard.putNumber("Right Slave output: ", rightSlave.getMotorOutputPercent());
+        
+    }
+    private static int kInverted = 1; //1 or -1
+    public static int getkInvert() { //only for teleop driving, up to user to read this flag
+        return kInverted;
     }
 
-    public void setOpenLoop(double left, double right) {
+    public static void setOpenLoop(double left, double right) {
         leftMaster.set(ControlMode.PercentOutput, left);
         rightMaster.set(ControlMode.PercentOutput, right);
+    }
+
+    public static void setInverted(boolean status) { //For defense, the back of the robot becomes the front
+        if(status) {
+            kInverted = -1;
+        } else {
+            kInverted = 1;
+        }
     }
 
     public void stop() {

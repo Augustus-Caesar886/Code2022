@@ -11,6 +11,8 @@ import com.ctre.phoenix.motorcontrol.can.TalonSRXConfiguration;
 import com.revrobotics.CANSparkMax;
 import com.revrobotics.CANSparkMax.IdleMode;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
+import com.revrobotics.ColorSensorV3;
+import edu.wpi.first.wpilibj.I2C.Port;
 
 public class Util {
 
@@ -44,10 +46,10 @@ public class Util {
      */
     public static TalonSRX createTalonSRX(int id, int continuousCurrentLimit, int peakCurrentLimit, int peakCurrentDuration) {
         TalonSRXConfiguration config = new TalonSRXConfiguration();
-        config.continuousCurrentLimit = continuousCurrentLimit;
+        /*config.continuousCurrentLimit = continuousCurrentLimit;
         config.peakCurrentLimit = peakCurrentLimit;
         config.peakCurrentDuration = peakCurrentDuration;
-        config.voltageCompSaturation = voltageCompensation;
+        config.voltageCompSaturation = voltageCompensation;*/
 
         TalonSRX talon = new TalonSRX(id);
         talon.configFactoryDefault();
@@ -84,12 +86,12 @@ public class Util {
      */
     public static CANSparkMax createSparkMAX(int id, MotorType motortype, int stallLimit) {
         CANSparkMax sparkMAX = new CANSparkMax(id, motortype);
-        sparkMAX.restoreFactoryDefaults();
+        /*sparkMAX.restoreFactoryDefaults();
         sparkMAX.enableVoltageCompensation(voltageCompensation);
         sparkMAX.setSmartCurrentLimit(stallLimit);
-        sparkMAX.setIdleMode(IdleMode.kBrake);
+        sparkMAX.setIdleMode(IdleMode.kCoast);*/
 
-        sparkMAX.burnFlash();
+        //sparkMAX.burnFlash();
         return sparkMAX;
     }
 
@@ -129,5 +131,15 @@ public class Util {
 
         return talon;
 
+    }
+
+    /*
+    * Create a configured ColorSensorV3
+    * @param id the ID of the motor
+    * @return a fully configured ColorSensorV3
+    */
+    public static ColorSensorV3 createColorSensorV3(Port port) {
+        ColorSensorV3 colorSensorV3 = new ColorSensorV3(port);
+        return colorSensorV3;
     }
 }
